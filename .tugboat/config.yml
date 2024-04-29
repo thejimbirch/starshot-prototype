@@ -1,0 +1,31 @@
+# https://docs.tugboatqa.com/reference/tugboat-configuration/
+# https://docs.tugboatqa.com/starter-configs/tutorials/drupal-10/
+services:
+  database:
+    image: tugboatqa/mariadb:10.5
+    commands:
+      init:
+        # Increase the allowed packet size to 512MB.
+        - mysql -e "SET GLOBAL max_allowed_packet=536870912;"
+        # Ensure this packet size persists even if MySQL restarts.
+        - echo "max_allowed_packet=536870912" >> /etc/mysql/conf.d/tugboat.cnf
+      build: []
+
+  webserver:
+    image: tugboatqa/php:8.3-apache
+    default: true
+    depends: database
+    commands:
+      init:
+        - docker-php-ext-install opcache
+        - a2enmod headers rewrite
+        - ln -snf "${TUGBOAT_ROOT}/web" "${DOCROOT}"
+      build:
+        - composer install
+        - composer run drupal:install
+
+        # Make sure files and translations folders exist and are writable.
+        - mkdir -p "${DOCROOT}/sites/default/files/translations"
+        - chgrp -R www-data "${DOCROOT}/sites/default/files"
+        - find "${DOCROOT}/sites/default/files" -type d -exec chmod 2775 {} \;
+        - find "${DOCROOT}/sites/default/files" -type f -exec chmod 0664 {} \;
